@@ -24,6 +24,9 @@ from torch.utils.data import Dataset, DataLoader
 
 import coco_eval
 import csv_eval
+import outputs
+
+from tensorboardX import SummaryWriter
 
 assert torch.__version__.split('.')[1] == '4'
 
@@ -115,6 +118,9 @@ def main(args=None):
 
 	print('Num training images: {}'.format(len(dataset_train)))
 
+	tr = outputs.create_training_output(os.path.expanduser("~/experiment_results/retina_net"))
+	writer = tr.writer
+	
 	for epoch_num in range(parser.epochs):
 
 		retinanet.train()
@@ -158,7 +164,14 @@ def main(args=None):
 
 			print('Evaluating dataset')
 
-			coco_eval.evaluate_coco(dataset_val, retinanet)
+			coco_eval_stats = coco_eval.evaluate_coco(dataset_val, retinanet, writer)
+
+			experiment_configuration['evals'] = coco_eval_stats.stats
+			for i, stat in enumerate(coco_eval_stats.stats):
+				writer.add_scalar(f"evals/{i}", epoch_num, stat)
+
+			import json
+			json.dump(experiment_configuration, open(tr.experiment_configuration_path(), 'w'))
 
 		elif parser.dataset == 'csv' and parser.csv_val is not None:
 
@@ -174,6 +187,7 @@ def main(args=None):
 	retinanet.eval()
 
 	torch.save(retinanet, 'model_final.pt'.format(epoch_num))
+	writer.close()
 
 if __name__ == '__main__':
- main()
+	main()
